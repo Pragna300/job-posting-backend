@@ -1,5 +1,5 @@
 const express = require('express');
-const { getProfile, updateProfile, getMyJobs, getDashboardStats, scheduleInterview, rejectCandidate } = require('../controllers/company.controller');
+const { getProfile, updateProfile, getMyJobs, getDashboardStats, scheduleInterview, rejectCandidate, fetchInterviewResults } = require('../controllers/company.controller');
 const authMiddleware = require('../middleware/auth.middleware');
 const roleMiddleware = require('../middleware/role.middleware');
 const upload = require('../middleware/upload.middleware');
@@ -17,5 +17,6 @@ router.get('/dashboard-stats', getDashboardStats);
 
 router.patch('/schedule-interview/:id', scheduleInterview);
 router.patch('/reject-candidate/:id', rejectCandidate);
+router.get('/interview-results/:application_id', fetchInterviewResults);
 
 module.exports = router;

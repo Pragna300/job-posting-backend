@@ -98,7 +98,7 @@ function fallbackExtractEntitiesFromText(resumeText) {
 }
 
 async function extractResumeEntities(resumeText) {
-  const hfApiKey = (process.env.HF_API_KEY || '').trim();
+  const hfApiKey = (process.env.HF_API_KEY || process.env.HF_TOKEN || '').trim();
   if (!hfApiKey) throw new Error('HF_API_KEY is not configured');
   if (!resumeText || !resumeText.trim()) throw new Error('Resume text is empty');
 

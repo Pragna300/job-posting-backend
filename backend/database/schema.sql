@@ -1,5 +1,5 @@
 -- Users table
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
@@ -16,7 +16,7 @@ CREATE TABLE users (
 );
 
 -- Companies table
-CREATE TABLE companies (
+CREATE TABLE IF NOT EXISTS companies (
   id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
@@ -34,7 +34,7 @@ CREATE TABLE companies (
 );
 
 -- Jobs table
-CREATE TABLE jobs (
+CREATE TABLE IF NOT EXISTS jobs (
   id SERIAL PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
   description TEXT NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE jobs (
 );
 
 -- Applications table
-CREATE TABLE applications (
+CREATE TABLE IF NOT EXISTS applications (
   id SERIAL PRIMARY KEY,
   job_id INT NOT NULL,
   user_id INT NOT NULL,
@@ -67,7 +67,7 @@ CREATE TABLE applications (
 );
 
 -- Notifications table
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
   id SERIAL PRIMARY KEY,
   user_id INT NOT NULL,
   message TEXT NOT NULL,
@@ -78,7 +78,7 @@ CREATE TABLE notifications (
 );
 
 -- Saved jobs table
-CREATE TABLE saved_jobs (
+CREATE TABLE IF NOT EXISTS saved_jobs (
   id SERIAL PRIMARY KEY,
   user_id INT NOT NULL,
   job_id INT NOT NULL,
@@ -106,3 +106,23 @@ CREATE TABLE saved_jobs (
 -- ALTER TABLE applications ADD COLUMN IF NOT EXISTS interview_status VARCHAR(50) DEFAULT 'Not Scheduled';
 -- ALTER TABLE applications ADD COLUMN IF NOT EXISTS interview_link VARCHAR(500);
 -- ALTER TABLE applications ADD COLUMN IF NOT EXISTS interview_notified BOOLEAN DEFAULT FALSE;
+
+-- AI Interview System Migration
+CREATE TABLE IF NOT EXISTS interview_links (
+  id SERIAL PRIMARY KEY,
+  token UUID UNIQUE NOT NULL,
+  user_id INT NOT NULL REFERENCES users(id),
+  application_id INT NOT NULL REFERENCES applications(id),
+  is_used BOOLEAN DEFAULT false,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS interview_results (
+  id SERIAL PRIMARY KEY,
+  user_id INT NOT NULL REFERENCES users(id),
+  application_id INT NOT NULL REFERENCES applications(id),
+  score INT,
+  feedback JSONB,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

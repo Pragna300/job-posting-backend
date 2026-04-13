@@ -4,6 +4,12 @@ const Application = require('../models/application.model');
 const User = require('../models/user.model');
 const pool = require('../config/db');
 const { sendInterviewSetupNotification, sendPostAssessmentRejectionNotification } = require('../services/notificationService');
+const crypto = require('crypto');
+
+const buildInterviewLink = (token) => {
+  const base = process.env.FRONTEND_URL || 'http://localhost:5173';
+  return `${base.replace(/\/$/, '')}/interview/verify?token=${token}`;
+};
 
 const getProfile = async (req, res) => {
   try {
@@ -103,7 +109,18 @@ const scheduleInterview = async (req, res) => {
       return res.status(403).json({ message: 'Unauthorized' });
     }
 
-    const interviewLink = `https://interview.shnoor-temp-link.com/session/${application.user_id}`;
+    const token = crypto.randomUUID();
+    const interviewLink = buildInterviewLink(token);
+
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    // Insert into interview_links table
+    await pool.query(
+      `INSERT INTO interview_links (token, user_id, application_id, expires_at)
+       VALUES ($1, $2, $3, $4)`,
+      [token, application.user_id, application.id, expiresAt]
+    );
 
     // Update DB explicitly
     await pool.query(
@@ -153,4 +170,30 @@ const rejectCandidate = async (req, res) => {
   }
 };
 
-module.exports = { getProfile, updateProfile, getMyJobs, getDashboardStats, scheduleInterview, rejectCandidate };
+const fetchInterviewResults = async (req, res) => {
+  try {
+    const applicationId = req.params.application_id;
+    const application = await Application.findById(applicationId);
+    if (!application) {
+      return res.status(404).json({ message: 'Application not found' });
+    }
+
+    const job = await Job.findById(application.job_id);
+    const company = await Company.findByManagerId(req.user.id);
+    
+    if (job.company_id !== company.id) {
+      return res.status(403).json({ message: 'Unauthorized' });
+    }
+
+    const { rows } = await pool.query(
+      'SELECT id, score, feedback, created_at FROM interview_results WHERE application_id = $1 ORDER BY created_at DESC',
+      [applicationId]
+    );
+
+    res.json({ results: rows });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+module.exports = { getProfile, updateProfile, getMyJobs, getDashboardStats, scheduleInterview, rejectCandidate, fetchInterviewResults };

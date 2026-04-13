@@ -27,6 +27,8 @@ const jobRoutes = require('./routes/job.routes');
 const applicationRoutes = require('./routes/application.routes');
 const userRoutes = require('./routes/user.routes');
 const resumeRoutes = require('./routes/resumeRoutes');
+const interviewRoutes = require('./routes/interview.routes');
+const interviewPanelRoutes = require('./routes/interviewPanel.routes');
 
 app.use('/auth', authRoutes);
 app.use('/admin', adminRoutes);
@@ -35,6 +37,8 @@ app.use('/jobs', jobRoutes);
 app.use('/applications', applicationRoutes);
 app.use('/users', userRoutes);
 app.use('/api/resume', resumeRoutes);
+app.use('/api/interviews', interviewRoutes);
+app.use('/api/interview', interviewPanelRoutes);
 
 // Health check
 app.get('/', (req, res) => {

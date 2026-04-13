@@ -37,7 +37,7 @@ exports.verifyUser = async (req, res) => {
     if (!user.rows.length)
       return res.status(401).json({ error: "Invalid email" });
 
-    res.json({ message: "Verified" });
+    res.json({ message: "Verified", token });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -140,23 +140,36 @@ exports.submitInterview = async (req, res) => {
   const { token, answers } = req.body;
 
   try {
+    const link = await pool.query(
+      "SELECT * FROM interview_links WHERE token=$1",
+      [token]
+    );
+
+    if (!link.rows.length) {
+      return res.status(400).json({ error: "Invalid token" });
+    }
+
+    const linkData = link.rows[0];
+
+    if (linkData.is_used) {
+      return res.status(400).json({ error: "Link already used" });
+    }
+
+    if (new Date(linkData.expires_at) < new Date()) {
+      return res.status(400).json({ error: "Link expired" });
+    }
+
     const rawEval = await callAI(evaluationPrompt(answers));
     const evaluation = safeJsonParse(rawEval);
 
     if (!evaluation)
       return res.status(500).json({ error: "AI evaluation failed" });
 
-    const link = await pool.query(
-      "SELECT * FROM interview_links WHERE token=$1",
-      [token]
-    );
-
-    const userId = link.rows[0].user_id;
-
     await pool.query(
-      "INSERT INTO interview_results(user_id, score, feedback) VALUES($1,$2,$3)",
+      "INSERT INTO interview_results (user_id, application_id, score, feedback) VALUES ($1, $2, $3, $4)",
       [
-        userId,
+        linkData.user_id,
+        linkData.application_id,
         evaluation.overall_score,
         JSON.stringify(evaluation),
       ]
@@ -166,6 +179,15 @@ exports.submitInterview = async (req, res) => {
       "UPDATE interview_links SET is_used=true WHERE token=$1",
       [token]
     );
+
+    try {
+      await pool.query(
+        "UPDATE applications SET status = $1, test_score = $2, test_status = $3 WHERE id = $4",
+        ["test_completed", evaluation.overall_score, "completed", linkData.application_id]
+      );
+    } catch (e) {
+      console.warn("applications test columns update skipped:", e.message);
+    }
 
     res.json({
       message: "Interview submitted",

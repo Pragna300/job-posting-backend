@@ -6,7 +6,20 @@ const sendEmail = require('../utils/sendEmail');
 const { extractResumeText } = require('../utils/resumeParser');
 const { extractResumeEntities } = require('../services/hfResumeExtractor');
 const { scoreResumeEntities } = require('../services/atsScoring');
-const { sendAssessmentNotification, sendInterviewShortlistNotification, createAtsStatusNotification } = require('../services/notificationService');
+const {
+  sendAssessmentNotification,
+  sendInterviewShortlistNotification,
+  createAtsStatusNotification,
+  sendNotShortlistedNotification,
+  sendInterviewSetupNotification
+} = require('../services/notificationService');
+const pool = require('../config/db');
+const crypto = require('crypto');
+
+const buildInterviewLink = (token) => {
+  const base = process.env.FRONTEND_URL || 'http://localhost:5173';
+  return `${base.replace(/\/$/, '')}/interview/verify?token=${token}`;
+};
 
 const applyForJob = async (req, res) => {
   try {
@@ -116,6 +129,13 @@ const applyForJob = async (req, res) => {
       } catch (notifyError) {
         console.error('Assessment notification failed:', notifyError.message);
       }
+    } else {
+      try {
+        const company = await Company.findById(job.company_id);
+        await sendNotShortlistedNotification(req.user.id, user.email, user.name, job.title, company?.name);
+      } catch (notifyError) {
+        console.error('Not shortlisted notification failed:', notifyError.message);
+      }
     }
 
     res.status(201).json({
@@ -181,9 +201,58 @@ const updateApplicationStatus = async (req, res) => {
 
     // Send email notification
     const user = await User.findById(application.user_id);
-    const subject = `Application Status Update for ${job.title}`;
-    const text = `Your application status has been updated to: ${status}`;
-    await sendEmail(user.email, subject, text);
+    const companyOwnedByManager = await Company.findByManagerId(req.user.id);
+
+    if (status === 'shortlisted') {
+      await sendAssessmentNotification(
+        user.id,
+        user.email,
+        user.name,
+        job.title,
+        companyOwnedByManager?.manager_id,
+        companyOwnedByManager?.name
+      );
+    } else if (status === 'rejected') {
+      await sendNotShortlistedNotification(
+        user.id,
+        user.email,
+        user.name,
+        job.title,
+        companyOwnedByManager?.name
+      );
+    } else if (status === 'interview') {
+      const token = crypto.randomUUID();
+      const interviewLink = buildInterviewLink(token);
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
+
+      await pool.query(
+        `INSERT INTO interview_links (token, user_id, application_id, expires_at)
+         VALUES ($1, $2, $3, $4)`,
+        [token, application.user_id, application.id, expiresAt]
+      );
+
+      await pool.query(
+        `UPDATE applications
+         SET interview_status = 'Scheduled', interview_link = $1, interview_notified = true
+         WHERE id = $2`,
+        [interviewLink, req.params.id]
+      );
+
+      await sendInterviewSetupNotification(
+        user.id,
+        user.email,
+        user.name,
+        interviewLink,
+        job.title,
+        companyOwnedByManager?.name,
+        companyOwnedByManager?.manager_id
+      );
+    } else {
+      const subject = `Application Status Update for ${job.title}`;
+      const text = `Your application status has been updated to: ${status}`;
+      await sendEmail(user.email, subject, text);
+    }
 
     res.json({ message: 'Application status updated successfully' });
   } catch (error) {
